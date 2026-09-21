@@ -32,7 +32,7 @@ use ulid::Ulid;
 
 use crate::{
     HTTP_CLIENT, INTRA_CLUSTER_CLIENT,
-    about::{current, platform},
+    about::{current, get_latest_release, platform},
     handlers::{
         STREAM_NAME_HEADER_KEY,
         http::{
@@ -74,6 +74,9 @@ pub struct Report {
     server_mode: Mode,
     version: String,
     commit_hash: String,
+    latest_version: Option<String>,
+    latest_release_date: Option<DateTime<Utc>>,
+    update_available: Option<bool>,
     active_ingestors: u64,
     inactive_ingestors: u64,
     active_indexers: u64,
@@ -140,6 +143,16 @@ impl Report {
                 inactive_queriers += 1;
             }
         }
+        let current_release = current();
+        let (latest_version, latest_release_date, update_available) = match get_latest_release() {
+            Some(latest_release) => (
+                Some(latest_release.version.to_string()),
+                Some(latest_release.date),
+                Some(latest_release.version > current_release.released_version),
+            ),
+            None => (None, None, None),
+        };
+
         Ok(Self {
             deployment_id: storage::StorageMetadata::global().deployment_id,
             uptime: upt,
@@ -151,8 +164,11 @@ impl Report {
             platform: platform().to_string(),
             storage_mode: PARSEABLE.get_storage_mode_string().to_string(),
             server_mode: PARSEABLE.options.mode,
-            version: current().released_version.to_string(),
-            commit_hash: current().commit_hash,
+            version: current_release.released_version.to_string(),
+            commit_hash: current_release.commit_hash,
+            latest_version,
+            latest_release_date,
+            update_available,
             active_ingestors: ingestor_metrics.0,
             inactive_ingestors: ingestor_metrics.1,
             active_indexers,
